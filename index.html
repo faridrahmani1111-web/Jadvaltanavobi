@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>⚛️ چالش جدول تناوبی — محمد علی یوسفی</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cell: 42px;
+    --txt:#e8ecf5;
+    --muted:#8d99b5;
+    --ok:#2ecc71;
+    --bad:#ff5c5c;
+    --accent:#4dabf7;
+    --panel:rgba(19,26,46,.92);
+    --border:rgba(255,255,255,.1);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;overflow-x:hidden}
+  body{
+    font-family:"Vazirmatn",Tahoma,system-ui,sans-serif;
+    background:radial-gradient(900px 600px at 80% -10%,#1d2a4d 0%,#0b1020 55%) fixed;
+    color:var(--txt);min-height:100vh;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  }
+
+  /* ============ HUD ============ */
+  .hud{
+    position:sticky;top:0;z-index:40;
+    background:linear-gradient(180deg,rgba(11,16,32,.99) 0%,rgba(11,16,32,.94) 80%,rgba(11,16,32,0) 100%);
+    backdrop-filter:blur(10px);
+    padding:8px 10px 14px;
+  }
+  .hud-row{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:8px;margin-bottom:6px;flex-wrap:wrap;
+  }
+  .hud-title{font-weight:800;font-size:14px;letter-spacing:.3px}
+  .hud-stats{display:flex;gap:5px;font-size:11px;flex-wrap:wrap}
+  .hud-stats span{
+    background:rgba(255,255,255,.06);border:1px solid var(--border);
+    border-radius:8px;padding:3px 8px;white-space:nowrap;
+  }
+  .hud-stats b{color:var(--accent);font-size:13px;margin-inline-start:3px}
+  .hud-stats .low b{color:var(--bad);animation:blink .8s infinite alternate}
+
+  .qtext{
+    font-size:14px;font-weight:600;line-height:1.75;
+    min-height:42px;padding:0 2px;
+  }
+  .qtext b{color:var(--accent)}
+  .progress{height:4px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden}
+  .progress>i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#4dabf7,#39d3bb);transition:width .3s linear}
+
+  /* ============ جدول ============ */
+  .tablewrap{
+    direction:ltr;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    padding:6px 4px 18px;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent;
+  }
+  .tablewrap::-webkit-scrollbar{height:6px}
+  .tablewrap::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:99px}
+
+  .ptable{
+    display:grid;
+    grid-template-columns:repeat(18,var(--cell));
+    grid-template-rows:repeat(7,var(--cell)) 10px repeat(2,var(--cell));
+    gap:3px;width:max-content;margin:0 auto;
+  }
+
+  .cell{
+    position:relative;width:var(--cell);height:var(--cell);
+    border-radius:6px;border:1px solid rgba(255,255,255,.14);
+    background:rgba(255,255,255,.05);color:var(--txt);
+    font-family:inherit;display:flex;align-items:center;justify-content:center;
+    padding:0;cursor:pointer;overflow:hidden;
+    transition:transform .12s ease,box-shadow .12s ease,background .15s;
+    touch-action:manipulation;
+  }
+  .cell .num{
+    position:absolute;top:2px;left:3px;
+    font-size:max(5px,calc(var(--cell)*.22));opacity:.6;line-height:1;
+  }
+  .cell .sym{
+    font-size:max(8px,calc(var(--cell)*.4));
+    font-weight:800;letter-spacing:.3px;color:var(--c);
+  }
+  .cell:hover{transform:scale(1.14);z-index:10;box-shadow:0 0 0 2px var(--c),0 6px 18px rgba(0,0,0,.5)}
+  .cell.dim{opacity:.1;pointer-events:none;filter:grayscale(1)}
+  .cell.ok{background:rgba(46,204,113,.92)!important;border-color:#2ecc71!important;box-shadow:0 0 18px rgba(46,204,113,.8)}
+  .cell.ok .sym,.cell.bad .sym{color:#08131f!important}
+  .cell.bad{background:rgba(255,92,92,.88)!important;border-color:#ff5c5c!important;animation:shake .3s}
+  .cell.reveal{border-color:var(--ok)!important;box-shadow:0 0 0 2px var(--ok) inset;animation:pulse .7s infinite alternate}
+
+  .ph{
+    grid-row:6;grid-column:3;width:var(--cell);height:var(--cell);
+    display:flex;align-items:center;justify-content:center;
+    border:1px dashed rgba(255,255,255,.22);border-radius:6px;
+    font-size:max(6px,calc(var(--cell)*.22));color:var(--muted);
+  }
+  .ph.b{grid-row:7}
+
+  /* ============ کارت اطلاعات عنصر ============ */
+  .info-card{
+    position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(6,10,20,.88);backdrop-filter:blur(8px);
+    z-index:90;padding:16px;overflow-y:auto;
+    padding-top:calc(16px + env(safe-area-inset-top));
+    padding-bottom:calc(16px + env(safe-area-inset-bottom));
+  }
+  .info-card.show{display:flex}
+  .info-inner{
+    width:min(480px,100%);
+    background:linear-gradient(180deg,#1a2340,#121829);
+    border:1px solid rgba(120,160,255,.3);
+    border-radius:20px;padding:22px 18px;
+    box-shadow:0 24px 60px rgba(0,0,0,.7);
+    animation:pop .25s ease;
+    text-align:center;
+  }
+  .info-inner .big-sym{
+    font-size:52px;font-weight:800;line-height:1;
+    color:var(--accent);
+  }
+  .info-inner .el-name{
+    font-size:20px;font-weight:800;margin:4px 0 2px;
+  }
+  .info-inner .el-meta{
+    font-size:12px;color:var(--muted);margin-bottom:12px;
+  }
+  .info-inner .el-img{
+    width:100%;max-height:180px;object-fit:cover;
+    border-radius:12px;border:1px solid rgba(255,255,255,.1);
+    margin:10px 0;background:rgba(255,255,255,.04);
+  }
+  .info-inner .el-img-placeholder{
+    width:100%;height:120px;border-radius:12px;
+    background:rgba(255,255,255,.05);
+    border:1px dashed rgba(255,255,255,.15);
+    display:flex;align-items:center;justify-content:center;
+    font-size:40px;margin:10px 0;
+  }
+  .info-inner .el-use{
+    background:rgba(77,171,247,.1);
+    border:1px solid rgba(77,171,247,.25);
+    border-radius:12px;padding:10px 12px;
+    font-size:13px;line-height:1.9;
+    text-align:right;margin-top:8px;
+  }
+  .info-inner .el-use b{color:var(--accent)}
+  .info-inner .btn{margin-top:14px}
+
+  /* ============ راهنما ============ */
+  .legend{
+    display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;
+    padding:0 10px 10px;font-size:11px;color:var(--muted);
+  }
+  .legend span{display:flex;align-items:center;gap:5px}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  /* ============ دکمه‌های بزرگ‌نمایی ============ */
+  .zoom{
+    position:fixed;z-index:30;
+    bottom:calc(10px + env(safe-area-inset-bottom));
+    left:10px;display:flex;gap:4px;
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;padding:4px;backdrop-filter:blur(8px);
+    box-shadow:0 6px 20px rgba(0,0,0,.4);
+  }
+  .zoom button{
+    width:34px;height:34px;border:0;border-radius:8px;
+    background:rgba(255,255,255,.08);color:var(--txt);
+    font-size:17px;font-weight:800;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    touch-action:manipulation;transition:.15s;
+  }
+  .zoom button:active{background:rgba(255,255,255,.22);transform:scale(.94)}
+
+  /* ============ امضای سازنده ============ */
+  .credit{
+    text-align:center;font-size:12px;color:var(--muted);
+    padding:14px 10px calc(70px + env(safe-area-inset-bottom));
+    line-height:1.9;
+  }
+  .credit b{color:var(--txt);font-weight:800}
+  .credit .heart{color:#ff6b81}
+
+  /* ============ پوشش ============ */
+  .overlay{
+    position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(6,10,20,.85);backdrop-filter:blur(7px);
+    z-index:100;padding:16px;overflow-y:auto;
+    padding-top:calc(16px + env(safe-area-inset-top));
+    padding-bottom:calc(16px + env(safe-area-inset-bottom));
+  }
+  .overlay.show{display:flex}
+  .card{
+    width:min(520px,100%);
+    background:linear-gradient(180deg,#1a2340,#121829);
+    border:1px solid rgba(120,160,255,.25);
+    border-radius:20px;padding:24px 20px;text-align:center;
+    box-shadow:0 24px 60px rgba(0,0,0,.6);
+    animation:pop .25s ease;
+  }
+  .card h1{margin:0 0 8px;font-size:21px}
+  .card .sub{color:var(--muted);font-size:13px;line-height:1.9;margin:0 0 16px}
+  .card .sub b{color:var(--txt)}
+
+  .levels{display:grid;gap:9px;margin:14px 0}
+  .lvl{
+    font-family:inherit;cursor:pointer;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.14);
+    color:var(--txt);border-radius:12px;
+    padding:12px 14px;display:flex;justify-content:space-between;align-items:center;
+    transition:.15s;font-size:14px;gap:8px;touch-action:manipulation;
+  }
+  .lvl span{font-size:11px;color:var(--muted);text-align:left}
+  .lvl:hover,.lvl:active{background:rgba(77,171,247,.18);border-color:#4dabf7;transform:translateY(-2px)}
+  .lvl.star{border-color:rgba(255,214,102,.55);background:rgba(255,214,102,.08)}
+  .lvl.star b::after{content:" ⭐";font-size:12px}
+
+  .result{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:16px 0}
+  .result div{background:rgba(255,255,255,.05);border-radius:12px;padding:10px}
+  .result b{display:block;font-size:21px}
+  .result small{color:var(--muted);font-size:11px}
+
+  .btn{
+    font-family:inherit;cursor:pointer;border:0;border-radius:12px;
+    padding:12px 22px;font-size:14px;font-weight:700;
+    background:linear-gradient(90deg,#4dabf7,#39d3bb);color:#08131f;
+    transition:.15s;margin:4px;touch-action:manipulation;
+  }
+  .btn:hover,.btn:active{filter:brightness(1.1);transform:translateY(-2px)}
+  .btn.ghost{background:rgba(255,255,255,.08);color:var(--txt)}
+
+  .hint{font-size:11px;color:var(--muted);line-height:1.9;margin:10px 0 0}
+
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  @keyframes pulse{from{opacity:.55}to{opacity:1}}
+  @keyframes blink{from{opacity:1}to{opacity:.35}}
+  @keyframes pop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+
+  @media (min-width:700px){
+    .hud{padding:10px 16px 16px}
+    .hud-title{font-size:16px}
+    .hud-stats{font-size:12px}
+    .hud-stats b{font-size:15px}
+    .qtext{font-size:16px}
+    .credit{padding-bottom:24px}
+  }
+</style>
+</head>
+<body>
+
+  <div class="hud">
+    <div class="hud-row">
+      <div class="hud-title">⚛️ چالش جدول تناوبی</div>
+      <div class="hud-stats">
+        <span>امتیاز <b id="score">۰</b></span>
+        <span id="timeBox">زمان <b id="time">۰</b></span>
+        <span>زنجیره <b id="streak">۰</b></span>
+      </div>
+    </div>
+    <div class="qtext" id="qtext">برای شروع یک سطح را انتخاب کنید…</div>
+    <div class="progress"><i id="progressBar"></i></div>
+  </div>
+
+  <div class="tablewrap" id="tablewrap">
+    <div class="ptable" id="ptable"></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="zoom" id="zoom">
+    <button id="zoomOut" aria-label="کوچک‌تر">−</button>
+    <button id="zoomFit" aria-label="جای دادن در صفحه">⤢</button>
+    <button id="zoomIn" aria-label="بزرگ‌تر">+</button>
+  </div>
+
+  <footer class="credit">
+    ساخته شده با <span class="heart">❤</span> توسط <b>محمد علی یوسفی</b>
+  </footer>
+
+  <!-- کارت اطلاعات عنصر -->
+  <div class="info-card" id="infoCard">
+    <div class="info-inner" id="infoInner"></div>
+  </div>
+
+  <div class="overlay show" id="overlay">
+    <div class="card" id="card"></div>
+  </div>
+
+<script>
+/* ============================================================
+   داده‌های عناصر: [عدد اتمی، نماد، نام فارسی، دسته، دوره، گروه، کاربرد، تصویر]
+   کاربردها از کتاب‌های شیمی دهم، یازدهم و دوازدهم ایران
+   ============================================================ */
+const RAW = [
+[1,"H","هیدروژن","nonmetal",1,1,
+ "سوخت پیل‌های سوختی و تولید آمونیاک در صنعت", "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Hydrogen_fuel_cell_bus.jpg/320px-Hydrogen_fuel_cell_bus.jpg"],
+[2,"He","هلیوم","noble",1,18,
+ "پر کردن بالن‌های هواشناسی و خنک‌کننده در MRI", "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Helium_balloon.jpg/320px-Helium_balloon.jpg"],
+[3,"Li","لیتیوم","alkali",2,1,
+ "باتری‌های قابل شارژ موبایل و لپ‌تاپ", "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Lithium_battery.jpg/320px-Lithium_battery.jpg"],
+[4,"Be","بریلیم","alkaline",2,2,
+ "آلیاژهای سبک و مقاوم در صنایع هوافضا", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Beryllium_copper.jpg/320px-Beryllium_copper.jpg"],
+[5,"B","بور","metalloid",2,13,
+ "بوراکس در مواد شوینده و جاذب نوترون در راکتور", "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Borax.jpg/320px-Borax.jpg"],
+[6,"C","کربن","nonmetal",2,14,
+ "الماس در صنعت برش و گرافیت در مداد", "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Diamond_and_graphite.jpg/320px-Diamond_and_graphite.jpg"],
+[7,"N","نیتروژن","nonmetal",2,15,
+ "تولید کود شیمیایی و نیتروژن مایع برای انجماد", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Liquid_nitrogen.jpg/320px-Liquid_nitrogen.jpg"],
+[8,"O","اکسیژن","nonmetal",2,16,
+ "کپسول اکسیژن در بیمارستان و جوشکاری", "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Oxygen_cylinders.jpg/320px-Oxygen_cylinders.jpg"],
+[9,"F","فلوئور","halogen",2,17,
+ "خمیردندان حاوی فلوراید و تفلون", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Toothpaste.jpg/320px-Toothpaste.jpg"],
+[10,"Ne","نئون","noble",2,18,
+ "لامپ‌های نئون و تابلوهای تبلیغاتی", "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Neon_sign.jpg/320px-Neon_sign.jpg"],
+[11,"Na","سدیم","alkali",3,1,
+ "نمک طعام و صابون‌سازی", "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Salt_shaker.jpg/320px-Salt_shaker.jpg"],
+[12,"Mg","منیزیم","alkaline",3,2,
+ "آلیاژهای سبک در بدنه خودرو و هواپیما", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Magnesium_alloy_wheel.jpg/320px-Magnesium_alloy_wheel.jpg"],
+[13,"Al","آلومینیم","post",3,13,
+ "فویل آلومینیومی و قوطی نوشابه", "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Aluminium_foil.jpg/320px-Aluminium_foil.jpg"],
+[14,"Si","سیلیسیم","metalloid",3,14,
+ "سلول‌های خورشیدی و تراشه‌های کامپیوتری", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Solar_panel.jpg/320px-Solar_panel.jpg"],
+[15,"P","فسفر","nonmetal",3,15,
+ "کودهای شیمیایی و کبریت", "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Matches.jpg/320px-Matches.jpg"],
+[16,"S","گوگرد","nonmetal",3,16,
+ "تولید اسید سولفوریک و ولکانیزاسیون لاستیک", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Sulfur_rock.jpg/320px-Sulfur_rock.jpg"],
+[17,"Cl","کلر","halogen",3,17,
+ "ضدعفونی آب استخر و آب آشامیدنی", "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Swimming_pool.jpg/320px-Swimming_pool.jpg"],
+[18,"Ar","آرگون","noble",3,18,
+ "گاز محافظ در جوشکاری و پر کردن لامپ", "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Argon_welding.jpg/320px-Argon_welding.jpg"],
+[19,"K","پتاسیم","alkali",4,1,
+ "کود شیمیایی و ساخت شیشه", "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Potash_fertilizer.jpg/320px-Potash_fertilizer.jpg"],
+[20,"Ca","کلسیم","alkaline",4,2,
+ "سیمان و آهک در ساختمان‌سازی", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Cement_bags.jpg/320px-Cement_bags.jpg"],
+[21,"Sc","اسکاندیم","transition",4,3,
+ "آلیاژهای سبک در دوچرخه و تجهیزات ورزشی", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Scandium_bike_frame.jpg/320px-Scandium_bike_frame.jpg"],
+[22,"Ti","تیتانیم","transition",4,4,
+ "ایمپلنت‌های پزشکی و بدنه هواپیما", "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Titanium_hip_implant.jpg/320px-Titanium_hip_implant.jpg"],
+[23,"V","وانادیم","transition",4,5,
+ "فولادهای آلیاژی قوی و کاتالیزور", "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Vanadium_steel.jpg/320px-Vanadium_steel.jpg"],
+[24,"Cr","کروم","transition",4,6,
+ "فولاد ضدزنگ و آبکاری کروم", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Chrome_plating.jpg/320px-Chrome_plating.jpg"],
+[25,"Mn","منگنز","transition",4,7,
+ "تولید فولاد و باتری‌های خشک", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Manganese_dry_cell.jpg/320px-Manganese_dry_cell.jpg"],
+[26,"Fe","آهن","transition",4,8,
+ "ساخت و ساز و پل‌آهن و بدنه خودرو", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Iron_bridge.jpg/320px-Iron_bridge.jpg"],
+[27,"Co","کبالت","transition",4,9,
+ "باتری‌های لیتیوم-یونی و رنگدانه آبی", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Cobalt_blue_pigment.jpg/320px-Cobalt_blue_pigment.jpg"],
+[28,"Ni","نیکل","transition",4,10,
+ "فولاد ضدزنگ و سکه", "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Nickel_coin.jpg/320px-Nickel_coin.jpg"],
+[29,"Cu","مس","transition",4,11,
+ "سیم‌های برق و لوله‌های آب", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Copper_wire.jpg/320px-Copper_wire.jpg"],
+[30,"Zn","روی","transition",4,12,
+ "آبکاری فولاد و باتری", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Zinc_battery.jpg/320px-Zinc_battery.jpg"],
+[31,"Ga","گالیم","post",4,13,
+ "ال‌ای‌دی و نیمه‌رساناها", "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/LED_lamp.jpg/320px-LED_lamp.jpg"],
+[32,"Ge","ژرمانیم","metalloid",4,14,
+ "ترانزیستور و لنز دوربین", "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Camera_lens.jpg/320px-Camera_lens.jpg"],
+[33,"As","آرسنیک","metalloid",4,15,
+ "نیمه‌رساناها و آلیاژهای سخت", "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Gallium_arsenide_wafer.jpg/320px-Gallium_arsenide_wafer.jpg"],
+[34,"Se","سلنیم","nonmetal",4,16,
+ "سلول‌های خورشیدی و شیشه‌های رنگی", "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Selenium_solar_cell.jpg/320px-Selenium_solar_cell.jpg"],
+[35,"Br","برم","halogen",4,17,
+ "ضدعفونی آب و داروسازی", "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Bromine_water_treatment.jpg/320px-Bromine_water_treatment.jpg"],
+[36,"Kr","کریپتون","noble",4,18,
+ "لامپ‌های فلورسنت و لیزر", "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Fluorescent_lamp.jpg/320px-Fluorescent_lamp.jpg"],
+[37,"Rb","روبیدیم","alkali",5,1,"—",""],
+[38,"Sr","استرانسیم","alkaline",5,2,"—",""],
+[39,"Y","ایتریم","transition",5,3,"—",""],
+[40,"Zr","زیرکونیم","transition",5,4,"—",""],
+[41,"Nb","نیوبیم","transition",5,5,"—",""],
+[42,"Mo","مولیبدن","transition",5,6,"—",""],
+[43,"Tc","تکنسیم","transition",5,7,"—",""],
+[44,"Ru","روتنیم","transition",5,8,"—",""],
+[45,"Rh","رودیم","transition",5,9,"—",""],
+[46,"Pd","پالادیم","transition",5,10,"—",""],
+[47,"Ag","نقره","transition",5,11,"—",""],
+[48,"Cd","کادمیم","transition",5,12,"—",""],
+[49,"In","ایندیم","post",5,13,"—",""],
+[50,"Sn","قلع","post",5,14,"—",""],
+[51,"Sb","آنتیموان","metalloid",5,15,"—",""],
+[52,"Te","تلوریم","metalloid",5,16,"—",""],
+[53,"I","ید","halogen",5,17,"—",""],
+[54,"Xe","زنون","noble",5,18,"—",""],
+[55,"Cs","سزیم","alkali",6,1,"—",""],
+[56,"Ba","باریم","alkaline",6,2,"—",""],
+[57,"La","لانتان","lanthanide",6,3,"—",""],
+[58,"Ce","سریم","lanthanide",6,0,"—",""],
+[59,"Pr","پرازئودیم","lanthanide",6,0,"—",""],
+[60,"Nd","نئودیم","lanthanide",6,0,"—",""],
+[61,"Pm","پرومتیم","lanthanide",6,0,"—",""],
+[62,"Sm","ساماریم","lanthanide",6,0,"—",""],
+[63,"Eu","اروپیم","lanthanide",6,0,"—",""],
+[64,"Gd","گادولینیم","lanthanide",6,0,"—",""],
+[65,"Tb","تربیوم","lanthanide",6,0,"—",""],
+[66,"Dy","دیسپروزیم","lanthanide",6,0,"—",""],
+[67,"Ho","هولمیم","lanthanide",6,0,"—",""],
+[68,"Er","اربیم","lanthanide",6,0,"—",""],
+[69,"Tm","تولیم","lanthanide",6,0,"—",""],
+[70,"Yb","ایتربیم","lanthanide",6,0,"—",""],
+[71,"Lu","لوتسیم","lanthanide",6,0,"—",""],
+[72,"Hf","هافنیم","transition",6,4,"—",""],
+[73,"Ta","تانتال","transition",6,5,"—",""],
+[74,"W","تنگستن","transition",6,6,"—",""],
+[75,"Re","رنیوم","transition",6,7,"—",""],
+[76,"Os","اسمیم","transition",6,8,"—",""],
+[77,"Ir","ایریدیم","transition",6,9,"—",""],
+[78,"Pt","پلاتین","transition",6,10,"—",""],
+[79,"Au","طلا","transition",6,11,"—",""],
+[80,"Hg","جیوه","transition",6,12,"—",""],
+[81,"Tl","تالیم","post",6,13,"—",""],
+[82,"Pb","سرب","post",6,14,"—",""],
+[83,"Bi","بیسموت","post",6,15,"—",""],
+[84,"Po","پولونیم","post",6,16,"—",""],
+[85,"At","آستاتین","halogen",6,17,"—",""],
+[86,"Rn","رادون","noble",6,18,"—",""],
+[87,"Fr","فرانسیم","alkali",7,1,"—",""],
+[88,"Ra","رادیم","alkaline",7,2,"—",""],
+[89,"Ac","اکتینیم","actinide",7,3,"—",""],
+[90,"Th","توریم","actinide",7,0,"—",""],
+[91,"Pa","پروتاکتینیم","actinide",7,0,"—",""],
+[92,"U","اورانیم","actinide",7,0,"—",""],
+[93,"Np","نپتونیم","actinide",7,0,"—",""],
+[94,"Pu","پلوتونیم","actinide",7,0,"—",""],
+[95,"Am","امریسیم","actinide",7,0,"—",""],
+[96,"Cm","کوریم","actinide",7,0,"—",""],
+[97,"Bk","برکلیم","actinide",7,0,"—",""],
+[98,"Cf","کالیفرنیم","actinide",7,0,"—",""],
+[99,"Es","اینشتینیم","actinide",7,0,"—",""],
+[100,"Fm","فرمیم","actinide",7,0,"—",""],
+[101,"Md","مندلیفیم","actinide",7,0,"—",""],
+[102,"No","نوبلیم","actinide",7,0,"—",""],
+[103,"Lr","لورنسیم","actinide",7,0,"—",""],
+[104,"Rf","رادرفوردیم","transition",7,4,"—",""],
+[105,"Db","دوبنیم","transition",7,5,"—",""],
+[106,"Sg","سیبورگیم","transition",7,6,"—",""],
+[107,"Bh","بوهریم","transition",7,7,"—",""],
+[108,"Hs","هاسیم","transition",7,8,"—",""],
+[109,"Mt","مایتنریم","transition",7,9,"—",""],
+[110,"Ds","دارمشتاتیم","transition",7,10,"—",""],
+[111,"Rg","رونتگنیم","transition",7,11,"—",""],
+[112,"Cn","کوپرنیسیم","transition",7,12,"—",""],
+[113,"Nh","نیهونیم","post",7,13,"—",""],
+[114,"Fl","فلروویم","post",7,14,"—",""],
+[115,"Mc","مسکوویم","post",7,15,"—",""],
+[116,"Lv","لیفرموریم","post",7,16,"—",""],
+[117,"Ts","تنسین","halogen",7,17,"—",""],
+[118,"Og","اوگانسون","noble",7,18,"—",""]
+];
+
+const CATS = {
+  alkali:{fa:"فلز قلیایی",color:"#ff7b72"},
+  alkaline:{fa:"فلز قلیایی خاکی",color:"#ffa657"},
+  transition:{fa:"فلز واسطه",color:"#e3b341"},
+  post:{fa:"فلز پس‌واسطه",color:"#9ccc65"},
+  metalloid:{fa:"شبه‌فلز",color:"#39d3bb"},
+  nonmetal:{fa:"نافلز",color:"#58a6ff"},
+  halogen:{fa:"هالوژن",color:"#a371f7"},
+  noble:{fa:"گاز نجیب",color:"#f778ba"},
+  lanthanide:{fa:"لانتانید",color:"#5ce1c4"},
+  actinide:{fa:"اکتینید",color:"#ffb86b"}
+};
+
+const ELEMENTS = RAW.map(([z,sym,fa,cat,period,group,use,img])=>{
+  let row,col;
+  if (z>=57 && z<=71){ row=9; col=3+(z-57); }
+  else if (z>=89 && z<=103){ row=10; col=3+(z-89); }
+  else { row=period; col=group; }
+  return {z,sym,fa,cat,period,group,row,col,use,img};
+});
+
+const fa = n => String(n).replace(/[0-9]/g,d=>"۰۱۲۳۴۵۶۷۸۹"[+d]);
+const rand = a => a[Math.floor(Math.random()*a.length)];
+const hexA = (hex,a)=>{
+  const n=parseInt(hex.slice(1),16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+};
+
+let actx=null;
+function beep(freq,dur){
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type="sine"; o.frequency.value=freq; g.gain.value=0.05;
+    o.connect(g); g.connect(actx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+dur);
+    o.stop(actx.currentTime+dur);
+  }catch(e){}
+}
+function vibrate(pattern){
+  try{ if (navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+}
+
+const state = {
+  score:0, streak:0, correct:0, wrong:0,
+  timeLeft:90, totalTime:90,
+  running:false, answered:false,
+  q:null, pool:[], timer:null, level:"medium"
+};
+
+const $ = id => document.getElementById(id);
+const ptable = $("ptable");
+const overlay = $("overlay");
+const card = $("card");
+const tablewrap = $("tablewrap");
+const infoCard = $("infoCard");
+const infoInner = $("infoInner");
+
+/* ============ بزرگ‌نمایی ============ */
+const CELL_KEY = "ptable_cell_v2";
+let cellSize = 0;
+let manualZoom = false;
+
+function applyCell(size){
+  cellSize = Math.max(20, Math.min(72, Math.round(size)));
+  document.documentElement.style.setProperty("--cell", cellSize+"px");
+  try{ localStorage.setItem(CELL_KEY, cellSize); }catch(e){}
+}
+function fitCell(){
+  const style = getComputedStyle(tablewrap);
+  const pad = parseFloat(style.paddingLeft)+parseFloat(style.paddingRight);
+  const avail = tablewrap.clientWidth - pad - 4;
+  const gaps = 17*3;
+  const size = Math.floor((avail-gaps)/18);
+  applyCell(Math.max(20,size));
+  manualZoom = false;
+}
+function initCellSize(){
+  let stored = 0;
+  try{ stored = +(localStorage.getItem(CELL_KEY)||0); }catch(e){}
+  if (stored && stored >= 20){
+    applyCell(stored);
+    manualZoom = true;
+  } else {
+    fitCell();
+  }
+}
+
+$("zoomIn").addEventListener("click",()=>{ manualZoom=true; applyCell(cellSize+4); });
+$("zoomOut").addEventListener("click",()=>{ manualZoom=true; applyCell(cellSize-4); });
+$("zoomFit").addEventListener("click",()=>{ fitCell(); });
+
+let resizeTO=null;
+window.addEventListener("resize",()=>{
+  clearTimeout(resizeTO);
+  resizeTO = setTimeout(()=>{ if(!manualZoom) fitCell(); },150);
+});
+
+/* ============ ساخت جدول ============ */
+function buildTable(){
+  const frag = document.createDocumentFragment();
+
+  ELEMENTS.forEach(el=>{
+    const c = CATS[el.cat].color;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cell";
+    btn.dataset.z = el.z;
+    btn.style.gridRow = el.row;
+    btn.style.gridColumn = el.col;
+    btn.style.background = hexA(c,0.15);
+    btn.style.borderColor = hexA(c,0.45);
+    btn.style.setProperty("--c", c);
+    btn.setAttribute("aria-label", `${el.fa} — ${el.sym}`);
+    btn.innerHTML = `<span class="num">${fa(el.z)}</span><span class="sym">${el.sym}</span>`;
+    btn.addEventListener("click",()=>handleClick(el,btn));
+    frag.appendChild(btn);
+  });
+
+  const ph1=document.createElement("div");
+  ph1.className="ph"; ph1.textContent="۵۷–۷۱";
+  const ph2=document.createElement("div");
+  ph2.className="ph b"; ph2.textContent="۸۹–۱۰۳";
+  frag.appendChild(ph1); frag.appendChild(ph2);
+
+  ptable.appendChild(frag);
+}
+
+function buildLegend(){
+  $("legend").innerHTML = Object.values(CATS)
+    .map(c=>`<span><i style="background:${c.color}"></i>${c.fa}</span>`).join("");
+}
+
+/* ============ نمایش کارت اطلاعات ============ */
+function showInfo(el){
+  const catInfo = CATS[el.cat];
+  const hasUse = el.use && el.use !== "—";
+  const hasImg = el.img && el.img.trim() !== "";
+
+  infoInner.innerHTML = `
+    <div class="big-sym" style="color:${catInfo.color}">${el.sym}</div>
+    <div class="el-name">${el.fa}</div>
+    <div class="el-meta">عدد اتمی ${fa(el.z)} • ${catInfo.fa} • دوره ${fa(el.period)} • گروه ${fa(el.group)}</div>
+    ${hasImg 
+      ? `<img class="el-img" src="${el.img}" alt="${el.fa}" loading="lazy" onerror="this.outerHTML='<div class=\\'el-img-placeholder\\'>🧪</div>'">` 
+      : `<div class="el-img-placeholder">🧪</div>`}
+    ${hasUse 
+      ? `<div class="el-use"><b>🔬 کاربرد:</b> ${el.use}</div>` 
+      : `<div class="el-use" style="opacity:.5">کاربردی برای این عنصر در کتاب درسی ثبت نشده است.</div>`}
+    <button class="btn" id="closeInfo">بستن</button>
+  `;
+  infoCard.classList.add("show");
+  $("closeInfo").onclick = () => infoCard.classList.remove("show");
+  infoCard.onclick = (e) => { if (e.target === infoCard) infoCard.classList.remove("show"); };
+}
+
+/* ============ سؤال‌سازی ============ */
+function makeQuestion(){
+  const pool = state.pool;
+  const r = Math.random();
+
+  if (r < 0.25){
+    const e = rand(pool);
+    return {text:`عنصری را پیدا کن که نماد آن «<b>${e.sym}</b>» است`, check:x=>x.z===e.z};
+  }
+  if (r < 0.45){
+    const e = rand(pool);
+    return {text:`کدام عنصر «<b>${e.fa}</b>» نام دارد؟`, check:x=>x.z===e.z};
+  }
+  if (r < 0.62){
+    const e = rand(pool);
+    return {text:`عنصری با <b>عدد اتمی ${fa(e.z)}</b> کدام است؟`, check:x=>x.z===e.z};
+  }
+  if (r < 0.80){
+    const cands = pool.filter(e=>e.group>0 && !(e.z>=57&&e.z<=71) && !(e.z>=89&&e.z<=103));
+    const e = rand(cands);
+    return {
+      text:`کدام عنصر در <b>گروه ${fa(e.group)}</b> و <b>دوره ${fa(e.period)}</b> قرار دارد؟`,
+      check:x=>x.z===e.z
+    };
+  }
+  const cats = [...new Set(pool.map(e=>e.cat))];
+  const c = rand(cats);
+  return {text:`کدام عنصر یک <b>${CATS[c].fa}</b> است؟`, check:x=>x.cat===c};
+}
+
+/* ============ جریان بازی ============ */
+function startGame(level){
+  state.level = level;
+  const cfg = {
+    easy:   {max:20,  time:60},
+    medium: {max:36,  time:75},
+    hard:   {max:54,  time:90},
+    master: {max:118, time:120}
+  }[level];
+
+  state.pool = ELEMENTS.filter(e=>e.z<=cfg.max);
+  state.score = 0; state.streak = 0;
+  state.correct = 0; state.wrong = 0;
+  state.totalTime = cfg.time;
+  state.timeLeft = cfg.time;
+  state.running = true; state.answered = false;
+
+  document.querySelectorAll(".cell").forEach(c=>{
+    const z = +c.dataset.z;
+    c.classList.toggle("dim", z>cfg.max);
+    c.classList.remove("ok","bad","reveal");
+  });
+
+  overlay.classList.remove("show");
+  updateHUD();
+  nextQuestion();
+
+  clearInterval(state.timer);
+  state.timer = setInterval(tick,1000);
+}
+
+function nextQuestion(){
+  state.answered = false;
+  document.querySelectorAll(".cell").forEach(c=>c.classList.remove("ok","bad","reveal"));
+  state.q = makeQuestion();
+  $("qtext").innerHTML = state.q.text;
+}
+
+function handleClick(el,node){
+  if (!state.running || state.answered) return;
+  if (node.classList.contains("dim")) return;
+
+  state.answered = true;
+  const good = state.q.check(el);
+
+  if (good){
+    state.correct++;
+    state.streak++;
+    state.score += 10 + Math.min(state.streak-1,5)*2;
+    node.classList.add("ok");
+    beep(880,0.09);
+    vibrate(25);
+  } else {
+    state.wrong++;
+    state.streak = 0;
+    state.score = Math.max(0, state.score-5);
+    node.classList.add("bad");
+    document.querySelectorAll(".cell").forEach(c=>{
+      if (c.classList.contains("dim")) return;
+      const e2 = ELEMENTS[+c.dataset.z-1];
+      if (state.q.check(e2)) c.classList.add("reveal");
+    });
+    beep(180,0.18);
+    vibrate([50,30,50]);
+  }
+
+  updateHUD();
+
+  // نمایش کارت اطلاعات عنصر انتخاب‌شده
+  setTimeout(() => {
+    if (state.running) showInfo(el);
+  }, good ? 400 : 600);
+
+  setTimeout(()=>{ 
+    if (state.running) nextQuestion(); 
+  }, good ? 1200 : 1800);
+}
+
+function tick(){
+  state.timeLeft--;
+  updateHUD();
+  if (state.timeLeft<=0) endGame();
+}
+
+function updateHUD(){
+  $("score").textContent = fa(state.score);
+  $("streak").textContent = fa(state.streak) + (state.streak>=3 ? " 🔥" : "");
+  const t = $("time");
+  t.textContent = fa(Math.max(0,state.timeLeft));
+  $("timeBox").classList.toggle("low", state.timeLeft<=15);
+  const pct = Math.max(0,state.timeLeft/state.totalTime)*100;
+  $("progressBar").style.width = pct+"%";
+}
+
+function endGame(){
+  clearInterval(state.timer);
+  state.running = false;
+
+  const total = state.correct + state.wrong;
+  const acc = total ? Math.round((state.correct/total)*100) : 0;
+
+  let best = state.score;
+  try{
+    const key = "ptable_best_"+state.level;
+    best = Math.max(state.score, +(localStorage.getItem(key)||0));
+    localStorage.setItem(key,best);
+  }catch(e){}
+
+  const levelName = {easy:"آسان",medium:"متوسط",hard:"سخت",master:"استاد"}[state.level];
+
+  card.innerHTML = `
+    <h1>🏁 پایان بازی!</h1>
+    <p class="sub">سطح: <b>${levelName}</b></p>
+    <div class="result">
+      <div><b>${fa(state.score)}</b><small>امتیاز</small></div>
+      <div><b>${fa(state.correct)}</b><small>پاسخ درست</small></div>
+      <div><b>${fa(state.wrong)}</b><small>پاسخ غلط</small></div>
+      <div><b>${fa(acc)}٪</b><small>دقت</small></div>
+    </div>
+    <p class="sub">🥇 بهترین رکورد این سطح: <b>${fa(best)}</b></p>
+    <button class="btn" id="again">بازی دوباره</button>
+    <button class="btn ghost" id="menu">تغییر سطح</button>
+    <p class="hint">ساخته شده توسط <b>محمد علی یوسفی</b></p>
+  `;
+  overlay.classList.add("show");
+  $("again").onclick = ()=>startGame(state.level);
+  $("menu").onclick = showStart;
+}
+
+/* ============ صفحه شروع ============ */
+function showStart(){
+  clearInterval(state.timer);
+  state.running = false;
+  $("qtext").textContent = "برای شروع یک سطح را انتخاب کنید…";
+  $("progressBar").style.width = "100%";
+  $("score").textContent = "۰";
+  $("streak").textContent = "۰";
+  $("time").textContent = "۰";
+  $("timeBox").classList.remove("low");
+  document.querySelectorAll(".cell").forEach(c=>c.classList.remove("ok","bad","reveal","dim"));
+
+  card.innerHTML = `
+    <h1>⚛️ چالش جدول تناوبی</h1>
+    <p class="sub">
+      سؤال نمایش داده می‌شود؛ روی عنصر درست در جدول کلیک کن.<br>
+      بعد از هر انتخاب، کارت اطلاعات عنصر با <b>کاربرد</b> و <b>تصویر</b> نمایش داده می‌شود.
+    </p>
+    <div class="levels">
+      <button class="lvl" data-level="easy"><b>آسان</b><span>عناصر ۱ تا ۲۰ — ۶۰ ثانیه</span></button>
+      <button class="lvl star" data-level="medium"><b>متوسط</b><span>عناصر ۱ تا ۳۶ — ۷۵ ثانیه</span></button>
+      <button class="lvl" data-level="hard"><b>سخت</b><span>عناصر ۱ تا ۵۴ — ۹۰ ثانیه</span></button>
+      <button class="lvl" data-level="master"><b>استاد</b><span>همه‌ی ۱۱۸ عنصر — ۱۲۰ ثانیه</span></button>
+    </div>
+    <p class="hint">
+      📱 روی موبایل جدول را بکش و با دکمه‌های − و + بزرگ‌نمایی کن.<br>
+      کاربردها از کتاب‌های شیمی دهم، یازدهم و دوازدهم ایران.<br>
+      ساخته شده توسط <b>محمد علی یوسفی</b>
+    </p>
+  `;
+  overlay.classList.add("show");
+  card.querySelectorAll(".lvl").forEach(b=>b.onclick=()=>startGame(b.dataset.level));
+}
+
+/* ============ راه‌اندازی ============ */
+buildTable();
+buildLegend();
+initCellSize();
+showStart();
+</script>
+</body>
+</html>
